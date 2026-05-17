@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "The K-Brothers- Grok extension",
+  "version": "5.0",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "sidePanel",
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://grok.com/*",
+    "https://x.com/*"
+  ],
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "action": {
+    "default_title": "Abrir Painel K-Brothers"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
