@@ -326,17 +326,23 @@ if (typeof window.kBrothersInjected === 'undefined') {
 
         if (urlVerificacao && !urlsAnteriores.includes(urlVerificacao)) {
           if (urlVerificacao !== urlEmProcessamento) {
+            // URL changed — could be draft→final transition; reset counter
             urlEmProcessamento = urlVerificacao;
             contadorEstabilidade = 0;
-            relatarProgresso(originalIndex, "running", `Passo 4: A refinar qualidade...`);
+            relatarProgresso(originalIndex, "running", `Passo 4: Qualidade a melhorar...`);
           } else if (!btnStop) {
             contadorEstabilidade++;
-            if (contadorEstabilidade >= 5) {
-              relatarProgresso(originalIndex, "running", "Passo 4 Concluído: Geração estabilizada!");
+            // Two-phase stability: first 5 iters = draft stable; next 5 = confirm final.
+            // If Grok replaces draft with final, the URL changes and resets the counter.
+            if (contadorEstabilidade >= 10) {
+              relatarProgresso(originalIndex, "running", "Passo 4 Concluído: Versão final confirmada!");
               geracaoTerminada = true;
               break;
+            } else if (contadorEstabilidade === 5) {
+              relatarProgresso(originalIndex, "running", `Passo 4: Draft pronto, a aguardar versão final...`);
             } else {
-              relatarProgresso(originalIndex, "running", `Passo 4: A verificar estabilidade (${contadorEstabilidade}/5)...`);
+              const fase = contadorEstabilidade < 5 ? `draft (${contadorEstabilidade}/5)` : `final (${contadorEstabilidade - 5}/5)`;
+              relatarProgresso(originalIndex, "running", `Passo 4: A confirmar ${fase}...`);
             }
           } else {
             relatarProgresso(originalIndex, "running", `Passo 4: IA a processar...`);
@@ -377,7 +383,9 @@ if (typeof window.kBrothersInjected === 'undefined') {
 
         if (urlFinalDownload && !urlsAnteriores.includes(urlFinalDownload)) {
           if (urlFinalDownload.startsWith('blob:')) {
-            chrome.runtime.sendMessage({ action: "expect_download", filename: nomeFicheiro });
+            // Await ensures background has set expectedFilename BEFORE the click triggers
+            // onDeterminingFilename — eliminates the race condition with wrong filenames.
+            await chrome.runtime.sendMessage({ action: "expect_download", filename: nomeFicheiro });
             const a = document.createElement('a');
             a.href = urlFinalDownload;
             a.download = nomeLimpo;
@@ -405,7 +413,7 @@ if (typeof window.kBrothersInjected === 'undefined') {
         });
 
         if (botoesDownload.length > 0) {
-          chrome.runtime.sendMessage({ action: "expect_download", filename: nomeFicheiro });
+          await chrome.runtime.sendMessage({ action: "expect_download", filename: nomeFicheiro });
           botoesDownload[botoesDownload.length - 1].click();
           relatarProgresso(originalIndex, "done", `Guardado via botão nativo: ${nomeFicheiro}`);
           ficheiroSalvo = true;

@@ -8,8 +8,8 @@ let isPaused = false;
 
 chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
   if (expectedFilename) {
-    const ext = item.filename.split('.').pop();
-    suggest({ filename: `${expectedFilename}.${ext}`, conflictAction: 'uniquify' });
+    // expectedFilename already contains the full path + correct extension — use it directly
+    suggest({ filename: expectedFilename, conflictAction: 'uniquify' });
     expectedFilename = null;
   } else {
     suggest({});
@@ -17,7 +17,15 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
   return true;
 });
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // expect_download needs a synchronous response so content.js can await it,
+  // guaranteeing expectedFilename is set before the download link is clicked.
+  if (message.action === "expect_download") {
+    expectedFilename = message.filename;
+    sendResponse({ ok: true });
+    return false;
+  }
+
   switch (message.action) {
     case "start_batch":
       taskQueue = message.queue;
@@ -44,9 +52,6 @@ chrome.runtime.onMessage.addListener((message) => {
       break;
     case "download_media":
       chrome.downloads.download({ url: message.url, filename: message.filename });
-      break;
-    case "expect_download":
-      expectedFilename = message.filename;
       break;
   }
 });
