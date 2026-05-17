@@ -31,15 +31,40 @@ if (typeof window.kBrothersInjected === 'undefined') {
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
+  // Selects the best video: largest visible player wins over small previews/thumbnails
+  function obterMelhorVideo() {
+    const videos = Array.from(document.querySelectorAll('video'));
+    if (videos.length === 0) return null;
+
+    // Score each video: prioritise by display area, then by video resolution
+    const scored = videos
+      .map(v => {
+        const src = v.src && !v.src.startsWith('blob:null')
+          ? v.src
+          : v.querySelector('source')?.src || null;
+        if (!src) return null;
+        const rect = v.getBoundingClientRect();
+        const displayArea = rect.width * rect.height;
+        const resolution = (v.videoWidth || 0) * (v.videoHeight || 0);
+        return { src, displayArea, resolution };
+      })
+      .filter(Boolean);
+
+    if (scored.length === 0) return null;
+
+    // Sort: largest display area first; break ties by resolution
+    scored.sort((a, b) =>
+      b.displayArea !== a.displayArea
+        ? b.displayArea - a.displayArea
+        : b.resolution - a.resolution
+    );
+
+    return scored[0].src;
+  }
+
   function obterMediaUrl(tipo) {
     if (tipo === 'video') {
-      const videos = Array.from(document.querySelectorAll('video'));
-      for (let i = videos.length - 1; i >= 0; i--) {
-        const v = videos[i];
-        if (v.src && !v.src.startsWith('blob:null') && v.readyState >= 3) return v.src;
-        const source = v.querySelector('source');
-        if (source?.src) return source.src;
-      }
+      return obterMelhorVideo();
     } else {
       const imgs = Array.from(document.querySelectorAll('img')).filter(img => {
         const alt = (img.getAttribute('alt') || '').toLowerCase();
@@ -59,6 +84,9 @@ if (typeof window.kBrothersInjected === 'undefined') {
     const urls = [];
     if (tipo === 'video') {
       document.querySelectorAll('video').forEach(v => {
+        // Only blacklist visible videos; ignore hidden/zero-area elements
+        const rect = v.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return;
         if (v.src) urls.push(v.src);
         const s = v.querySelector('source');
         if (s?.src) urls.push(s.src);
