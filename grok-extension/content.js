@@ -326,23 +326,21 @@ if (typeof window.kBrothersInjected === 'undefined') {
 
         if (urlVerificacao && !urlsAnteriores.includes(urlVerificacao)) {
           if (urlVerificacao !== urlEmProcessamento) {
-            // URL changed — could be draft→final transition; reset counter
+            // URL changed — Grok started a second enhancement pass; reset counter
             urlEmProcessamento = urlVerificacao;
             contadorEstabilidade = 0;
-            relatarProgresso(originalIndex, "running", `Passo 4: Qualidade a melhorar...`);
+            relatarProgresso(originalIndex, "running", `Passo 4: Nova versão detetada, a aguardar melhoria...`);
           } else if (!btnStop) {
             contadorEstabilidade++;
-            // Two-phase stability: first 5 iters = draft stable; next 5 = confirm final.
-            // If Grok replaces draft with final, the URL changes and resets the counter.
-            if (contadorEstabilidade >= 10) {
+            // Wait 20 stable iterations (40s). If the URL changes at any point (draft→final
+            // enhancement pass), the counter resets to 0 and we wait another 40s for the
+            // final version. This ensures we always capture the enhanced video.
+            if (contadorEstabilidade >= 20) {
               relatarProgresso(originalIndex, "running", "Passo 4 Concluído: Versão final confirmada!");
               geracaoTerminada = true;
               break;
-            } else if (contadorEstabilidade === 5) {
-              relatarProgresso(originalIndex, "running", `Passo 4: Draft pronto, a aguardar versão final...`);
             } else {
-              const fase = contadorEstabilidade < 5 ? `draft (${contadorEstabilidade}/5)` : `final (${contadorEstabilidade - 5}/5)`;
-              relatarProgresso(originalIndex, "running", `Passo 4: A confirmar ${fase}...`);
+              relatarProgresso(originalIndex, "running", `Passo 4: A confirmar versão final (${contadorEstabilidade}/20)...`);
             }
           } else {
             relatarProgresso(originalIndex, "running", `Passo 4: IA a processar...`);
@@ -383,18 +381,36 @@ if (typeof window.kBrothersInjected === 'undefined') {
 
         if (urlFinalDownload && !urlsAnteriores.includes(urlFinalDownload)) {
           if (urlFinalDownload.startsWith('blob:')) {
-            // Await ensures background has set expectedFilename BEFORE the click triggers
-            // onDeterminingFilename — eliminates the race condition with wrong filenames.
-            await chrome.runtime.sendMessage({ action: "expect_download", filename: nomeFicheiro });
-            const a = document.createElement('a');
-            a.href = urlFinalDownload;
-            a.download = nomeLimpo;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            relatarProgresso(originalIndex, "done", `Guardado: ${nomeFicheiro}`);
-            ficheiroSalvo = true;
-            break;
+            // Fetch the blob from the page context (content script has access),
+            // convert to a data URL and send to background. background.js then calls
+            // chrome.downloads.download({ url: dataUrl, filename }) which guarantees
+            // the correct filename — bypassing <a> tag / onDeterminingFilename issues.
+            try {
+              relatarProgresso(originalIndex, "running", "Passo 5: A preparar ficheiro...");
+              const res = await fetch(urlFinalDownload);
+              const blob = await res.blob();
+              const dataUrl = await new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+              });
+              chrome.runtime.sendMessage({ action: "download_media", url: dataUrl, filename: nomeFicheiro });
+              relatarProgresso(originalIndex, "done", `Guardado: ${nomeFicheiro}`);
+              ficheiroSalvo = true;
+              break;
+            } catch (fetchErr) {
+              // Fallback: <a> tag click (less reliable for filename)
+              await chrome.runtime.sendMessage({ action: "expect_download", filename: nomeFicheiro });
+              const a = document.createElement('a');
+              a.href = urlFinalDownload;
+              a.download = nomeLimpo;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              relatarProgresso(originalIndex, "done", `Guardado: ${nomeFicheiro}`);
+              ficheiroSalvo = true;
+              break;
+            }
           } else if (!urlFinalDownload.startsWith('data:')) {
             chrome.runtime.sendMessage({ action: "download_media", url: urlFinalDownload, filename: nomeFicheiro });
             relatarProgresso(originalIndex, "done", `Guardado: ${nomeFicheiro}`);
