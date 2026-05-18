@@ -31,40 +31,23 @@ if (typeof window.kBrothersInjected === 'undefined') {
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  // Selects the best video: largest visible player wins over small previews/thumbnails
-  function obterMelhorVideo() {
-    const videos = Array.from(document.querySelectorAll('video'));
-    if (videos.length === 0) return null;
-
-    // Score each video: prioritise by display area, then by video resolution
-    const scored = videos
-      .map(v => {
-        const src = v.src && !v.src.startsWith('blob:null')
-          ? v.src
-          : v.querySelector('source')?.src || null;
-        if (!src) return null;
-        const rect = v.getBoundingClientRect();
-        const displayArea = rect.width * rect.height;
-        const resolution = (v.videoWidth || 0) * (v.videoHeight || 0);
-        return { src, displayArea, resolution };
-      })
-      .filter(Boolean);
-
-    if (scored.length === 0) return null;
-
-    // Sort: largest display area first; break ties by resolution
-    scored.sort((a, b) =>
-      b.displayArea !== a.displayArea
-        ? b.displayArea - a.displayArea
-        : b.resolution - a.resolution
-    );
-
-    return scored[0].src;
-  }
-
-  function obterMediaUrl(tipo) {
+  // Returns the best NEW media URL, excluding any URL already in blackList.
+  // For video: filters blacklist FIRST, then sorts remaining by display area + resolution.
+  function obterMediaUrl(tipo, blackList = []) {
     if (tipo === 'video') {
-      return obterMelhorVideo();
+      const scored = Array.from(document.querySelectorAll('video'))
+        .map(v => {
+          const src = v.src && !v.src.startsWith('blob:null')
+            ? v.src
+            : v.querySelector('source')?.src || null;
+          if (!src || blackList.includes(src)) return null;
+          const rect = v.getBoundingClientRect();
+          return { src, displayArea: rect.width * rect.height, resolution: (v.videoWidth || 0) * (v.videoHeight || 0) };
+        })
+        .filter(Boolean);
+      if (scored.length === 0) return null;
+      scored.sort((a, b) => b.displayArea !== a.displayArea ? b.displayArea - a.displayArea : b.resolution - a.resolution);
+      return scored[0].src;
     } else {
       const imgs = Array.from(document.querySelectorAll('img')).filter(img => {
         const alt = (img.getAttribute('alt') || '').toLowerCase();
@@ -73,6 +56,7 @@ if (typeof window.kBrothersInjected === 'undefined') {
         if (alt.includes('avatar') || alt.includes('profile') || src.includes('avatar')) return false;
         if (img.width > 0 && img.width < 250) return false;
         if (img.height > 0 && img.height < 250) return false;
+        if (blackList.includes(src)) return false;
         return true;
       });
       if (imgs.length > 0) return imgs[imgs.length - 1].src;
@@ -84,12 +68,9 @@ if (typeof window.kBrothersInjected === 'undefined') {
     const urls = [];
     if (tipo === 'video') {
       document.querySelectorAll('video').forEach(v => {
-        // Only blacklist visible videos; ignore hidden/zero-area elements
-        const rect = v.getBoundingClientRect();
-        if (rect.width === 0 && rect.height === 0) return;
-        if (v.src) urls.push(v.src);
+        if (v.src && !v.src.startsWith('blob:null')) urls.push(v.src);
         const s = v.querySelector('source');
-        if (s?.src) urls.push(s.src);
+        if (s?.src && !s.src.startsWith('blob:null')) urls.push(s.src);
       });
     } else {
       document.querySelectorAll('img').forEach(img => {
@@ -302,13 +283,15 @@ if (typeof window.kBrothersInjected === 'undefined') {
       let geracaoTerminada = false;
       let urlEmProcessamento = null;
       let contadorEstabilidade = 0;
+      let contadorBotaoDownload = 0;
       const maxIteracoes = config.media === 'video' ? 300 : 150; // 10min / 5min
 
       for (let t = 1; t <= maxIteracoes; t++) {
         await esperar(2000);
 
         const btnStop = document.querySelector('button[aria-label*="Stop" i], button[aria-label*="Cancel" i]');
-        const urlVerificacao = obterMediaUrl(config.media);
+        // Blacklist is already applied inside obterMediaUrl — returns only new URLs
+        const urlVerificacao = obterMediaUrl(config.media, urlsAnteriores);
 
         const modalEdicaoAberto = Array.from(document.querySelectorAll(
           'textarea, input, [contenteditable="true"], [role="textbox"]'
@@ -324,17 +307,36 @@ if (typeof window.kBrothersInjected === 'undefined') {
           break;
         }
 
-        if (urlVerificacao && !urlsAnteriores.includes(urlVerificacao)) {
+        // Primary signal: native download button visible without stop button = generation done
+        const btnDownloadNativo = Array.from(document.querySelectorAll('button, a, [role="button"]')).find(el => {
+          const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+          const title = (el.getAttribute('title') || '').toLowerCase();
+          return aria.includes('download') || aria.includes('baixar') || aria.includes('guardar') ||
+            aria.includes('save') || title.includes('download');
+        });
+
+        if (btnDownloadNativo && !btnStop) {
+          contadorBotaoDownload++;
+          if (contadorBotaoDownload >= 5) { // 10s stable with download button = final version ready
+            relatarProgresso(originalIndex, "running", "Passo 4 Concluído: Ficheiro pronto para download!");
+            geracaoTerminada = true;
+            break;
+          }
+        } else {
+          contadorBotaoDownload = 0;
+        }
+
+        if (urlVerificacao) {
           if (urlVerificacao !== urlEmProcessamento) {
-            // URL changed — Grok started a second enhancement pass; reset counter
+            // URL changed — Grok started a second enhancement pass; reset stability counter
             urlEmProcessamento = urlVerificacao;
             contadorEstabilidade = 0;
+            contadorBotaoDownload = 0;
             relatarProgresso(originalIndex, "running", `Passo 4: Nova versão detetada, a aguardar melhoria...`);
           } else if (!btnStop) {
             contadorEstabilidade++;
-            // Wait 20 stable iterations (40s). If the URL changes at any point (draft→final
-            // enhancement pass), the counter resets to 0 and we wait another 40s for the
-            // final version. This ensures we always capture the enhanced video.
+            // Wait 20 stable iterations (40s). If the URL changes (draft→final enhancement),
+            // the counter resets so we always capture the enhanced video.
             if (contadorEstabilidade >= 20) {
               relatarProgresso(originalIndex, "running", "Passo 4 Concluído: Versão final confirmada!");
               geracaoTerminada = true;
@@ -377,9 +379,9 @@ if (typeof window.kBrothersInjected === 'undefined') {
       for (let tentaDown = 1; tentaDown <= 5; tentaDown++) {
         await esperar(2000);
 
-        const urlFinalDownload = obterMediaUrl(config.media);
+        const urlFinalDownload = obterMediaUrl(config.media, urlsAnteriores);
 
-        if (urlFinalDownload && !urlsAnteriores.includes(urlFinalDownload)) {
+        if (urlFinalDownload) {
           if (urlFinalDownload.startsWith('blob:')) {
             // Fetch the blob from the page context (content script has access),
             // convert to a data URL and send to background. background.js then calls
