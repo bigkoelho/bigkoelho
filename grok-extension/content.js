@@ -173,6 +173,25 @@ if (typeof window.kBrothersInjected === 'undefined') {
         const fileInput = inputsFicheiro.length > 0 ? inputsFicheiro[inputsFicheiro.length - 1] : null;
 
         if (fileInput) {
+          // Baseline: count small visible images already in the compose area BEFORE upload
+          const obterThumbnailsCompose = () => {
+            const ta = document.querySelector('textarea[placeholder*="Imagine" i]') ||
+                       document.querySelector('textarea[placeholder*="Message" i]') ||
+                       document.querySelector('textarea[placeholder*="Grok" i]') ||
+                       document.querySelector('textarea[placeholder*="Mensagem" i]');
+            let container = ta ? ta.parentElement : document.body;
+            for (let i = 0; i < 6 && container && container.tagName !== 'BODY'; i++) {
+              container = container.parentElement;
+            }
+            return Array.from((container || document.body).querySelectorAll('img')).filter(img => {
+              const src = img.src || '';
+              return src && !src.startsWith('data:image/svg') &&
+                     img.offsetWidth > 5 && img.offsetWidth < 200 && img.offsetHeight > 5;
+            }).length;
+          };
+
+          const thumbsAntes = obterThumbnailsCompose();
+
           const dataTransfer = new DataTransfer();
           for (let img of images) {
             const res = await fetch(img.data);
@@ -180,7 +199,26 @@ if (typeof window.kBrothersInjected === 'undefined') {
           }
           fileInput.files = dataTransfer.files;
           fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-          await esperar(8000);
+
+          // Wait until Grok shows thumbnails for ALL uploaded images in the compose area
+          relatarProgresso(originalIndex, "running", `Passo 1: A aguardar confirmação do carregamento...`);
+          let uploadConfirmado = false;
+          for (let chk = 1; chk <= 40; chk++) { // max 80s
+            await esperar(2000);
+            const thumbsDepois = obterThumbnailsCompose();
+            if (thumbsDepois >= thumbsAntes + images.length) {
+              uploadConfirmado = true;
+              relatarProgresso(originalIndex, "running", `Passo 1: ${images.length} imagem(ns) confirmada(s)!`);
+              await esperar(1000);
+              break;
+            }
+            relatarProgresso(originalIndex, "running", `Passo 1: A carregar imagens... ${chk * 2}s`);
+          }
+
+          if (!uploadConfirmado) {
+            relatarProgresso(originalIndex, "running", `Passo 1: Aviso — upload não confirmado visualmente. A continuar...`);
+            await esperar(3000);
+          }
         } else {
           relatarProgresso(originalIndex, "error", "Falha: Caixa de anexo bloqueada pelo Grok.");
           chrome.runtime.sendMessage({ action: "task_done" });
@@ -255,10 +293,16 @@ if (typeof window.kBrothersInjected === 'undefined') {
 
           if (btnSend) {
             btnSend.click();
-          } else {
+          } else if (images.length === 0) {
+            // Only use keyboard Enter when there are no attached images.
+            // If images are present and the send button is disabled, Grok is still
+            // processing the uploads — using Enter would skip the reference images.
             tx.dispatchEvent(new KeyboardEvent('keydown', {
               key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
             }));
+          } else {
+            // Images attached but send button still disabled — wait for next iteration
+            relatarProgresso(originalIndex, "running", `Passo 3: A aguardar que o Grok processe as imagens...`);
           }
 
           await esperar(3000);
