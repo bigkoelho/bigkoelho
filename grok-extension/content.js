@@ -87,13 +87,19 @@ if (typeof window.kBrothersInjected === 'undefined') {
   const esperar = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   async function fecharJanelasEModais() {
-    const botoes = Array.from(document.querySelectorAll('button'));
-    const btnFechar = botoes.find(b => {
-      const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-      const title = (b.getAttribute('title') || '').toLowerCase();
-      return aria === 'close' || aria === 'fechar' || title === 'close' || title === 'fechar';
-    });
-    if (btnFechar) { btnFechar.click(); await esperar(500); }
+    // Only close buttons that are INSIDE a visible dialog — never click stray "close"
+    // buttons elsewhere on the page (e.g. gallery cards, side-panel toggles).
+    const modaisVisiveis = Array.from(document.querySelectorAll(
+      'dialog, [role="dialog"], [role="alertdialog"]'
+    )).filter(el => el.offsetWidth > 0 && el.offsetHeight > 0);
+
+    for (const modal of modaisVisiveis) {
+      const btnFechar = modal.querySelector(
+        'button[aria-label*="close" i], button[aria-label*="fechar" i], button[title*="close" i]'
+      );
+      if (btnFechar) { btnFechar.click(); await esperar(600); break; }
+    }
+
     document.body.dispatchEvent(new KeyboardEvent('keydown', {
       key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true
     }));
@@ -351,10 +357,23 @@ if (typeof window.kBrothersInjected === 'undefined') {
           const progressEl = Array.from(document.querySelectorAll('div, span, p')).find(el =>
             el.innerText && /^\d{1,3}%$/.test(el.innerText.trim())
           );
-          if (progressEl) {
+          // Detect Grok server errors (toast messages, error banners)
+          const erroServidor = Array.from(document.querySelectorAll(
+            '[class*="error" i], [class*="toast" i], [role="alert"]'
+          )).find(el => {
+            const txt = (el.innerText || '').trim();
+            return txt.length > 5 && txt.length < 300 &&
+              /something went wrong|try again|server error|falhou|tente novamente/i.test(txt);
+          });
+          if (erroServidor) {
+            relatarProgresso(originalIndex, "error", `Erro do servidor Grok. A avançar para o próximo.`);
+            geracaoTerminada = true;
+            break;
+          } else if (progressEl) {
             relatarProgresso(originalIndex, "running", `Passo 4: A renderizar (${progressEl.innerText.trim()})...`);
           } else {
-            relatarProgresso(originalIndex, "running", `Passo 4: A aguardar resposta... ${t * 2}s`);
+            const tempoEst = config.media === 'video' ? '~2-4 min' : '~30s';
+            relatarProgresso(originalIndex, "running", `Passo 4: A aguardar resposta... ${t * 2}s (estimado ${tempoEst})`);
           }
         }
       }
