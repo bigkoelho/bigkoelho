@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Social Scheduler</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3e;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --text: #e2e8f0;
+    --muted: #718096;
+    --green: #48bb78;
+    --yellow: #ecc94b;
+    --red: #fc8181;
+    --orange: #ed8936;
+    --radius: 12px;
+    --font: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+  /* Layout */
+  .app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .main { padding: 32px; overflow-y: auto; }
+
+  /* Sidebar */
+  .logo { font-size: 20px; font-weight: 700; color: var(--accent); padding: 8px 12px 24px; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent2); }
+  .nav-btn { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; font-weight: 500; width: 100%; text-align: left; transition: all .15s; }
+  .nav-btn:hover, .nav-btn.active { background: rgba(108,99,255,.15); color: var(--accent); }
+  .nav-btn svg { flex-shrink: 0; }
+
+  /* Header */
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+  .page-title { font-size: 24px; font-weight: 700; }
+  .page-sub { font-size: 14px; color: var(--muted); margin-top: 4px; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; }
+  .card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+
+  /* Stats row */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .stat-value { font-size: 28px; font-weight: 700; }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
+  .stat.pending .stat-value { color: var(--yellow); }
+  .stat.published .stat-value { color: var(--green); }
+  .stat.error .stat-value { color: var(--red); }
+  .stat.total .stat-value { color: var(--accent); }
+
+  /* Upload zone */
+  .drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 40px; text-align: center; cursor: pointer; transition: all .2s; position: relative; }
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: rgba(108,99,255,.07); }
+  .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-text { color: var(--muted); font-size: 14px; }
+  .drop-text strong { color: var(--text); }
+
+  /* Buttons */
+  .btn { padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #5a52e0; }
+  .btn-danger { background: rgba(252,129,129,.15); color: var(--red); }
+  .btn-danger:hover { background: rgba(252,129,129,.25); }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 14px; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); }
+  td { padding: 12px 14px; border-bottom: 1px solid rgba(42,45,62,.6); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .msg-cell { max-width: 320px; word-break: break-word; line-height: 1.5; }
+  .platforms { display: flex; gap: 4px; flex-wrap: wrap; }
+  .platform-tag { background: rgba(108,99,255,.2); color: var(--accent); padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .platform-tag.fb { background: rgba(24,119,242,.2); color: #4a90e2; }
+  .platform-tag.ig { background: rgba(255,101,132,.2); color: var(--accent2); }
+
+  /* Status badges */
+  .badge { padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+  .badge.pending { background: rgba(236,201,75,.15); color: var(--yellow); }
+  .badge.published { background: rgba(72,187,120,.15); color: var(--green); }
+  .badge.error { background: rgba(252,129,129,.15); color: var(--red); }
+  .badge.partial { background: rgba(237,137,54,.15); color: var(--orange); }
+
+  /* Error tooltip */
+  .err-text { font-size: 11px; color: var(--red); margin-top: 4px; max-width: 280px; word-break: break-word; }
+
+  /* Forms */
+  .form-group { margin-bottom: 16px; }
+  label { font-size: 13px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 6px; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px; outline: none; transition: border .15s;
+  }
+  input:focus { border-color: var(--accent); }
+
+  /* Alert */
+  .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+  .alert.success { background: rgba(72,187,120,.15); color: var(--green); border: 1px solid rgba(72,187,120,.3); }
+  .alert.error { background: rgba(252,129,129,.15); color: var(--red); border: 1px solid rgba(252,129,129,.3); }
+  .alert.info { background: rgba(108,99,255,.15); color: #a9a4ff; border: 1px solid rgba(108,99,255,.3); }
+
+  /* CSV example */
+  pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 12px; color: var(--muted); overflow-x: auto; line-height: 1.7; }
+
+  /* Section toggles */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { flex-direction: row; overflow-x: auto; padding: 12px; }
+    .logo { display: none; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">Social<span>Sched</span></div>
+    <button class="nav-btn active" onclick="showSection('dashboard')">
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-btn" onclick="showSection('upload')">
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      Importar CSV
+    </button>
+    <button class="nav-btn" onclick="showSection('posts')">
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      Posts
+    </button>
+    <button class="nav-btn" onclick="showSection('config')">
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41M21 12h-2M5 12H3M12 3v2M12 19v2"/></svg>
+      Configurações
+    </button>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- Dashboard -->
+    <div id="section-dashboard" class="section active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-sub">Visão geral dos posts agendados</div>
+        </div>
+        <button class="btn btn-primary" onclick="showSection('upload')">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          Importar
+        </button>
+      </div>
+      <div class="stats" id="stats">
+        <div class="stat total"><div class="stat-value" id="s-total">0</div><div class="stat-label">Total</div></div>
+        <div class="stat pending"><div class="stat-value" id="s-pending">0</div><div class="stat-label">Pendentes</div></div>
+        <div class="stat published"><div class="stat-value" id="s-published">0</div><div class="stat-label">Publicados</div></div>
+        <div class="stat error"><div class="stat-value" id="s-error">0</div><div class="stat-label">Erros</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          Próximos posts
+        </div>
+        <div id="next-posts-list"></div>
+      </div>
+    </div>
+
+    <!-- Upload -->
+    <div id="section-upload" class="section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Importar CSV / TXT</div>
+          <div class="page-sub">Faz upload do ficheiro com os posts agendados</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Formato do ficheiro</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">O ficheiro CSV deve ter as seguintes colunas (separador <code>,</code> ou <code>;</code>):</p>
+        <pre>date,time,message,image_url,platforms
+2026-05-20,09:00,Bom dia! Confere o nosso novo produto 🚀,https://example.com/img.jpg,instagram,facebook
+2026-05-21,14:30,Post só no Facebook sem imagem,,facebook
+2026-05-22,10:00,Post em todas as redes com imagem,https://example.com/foto2.jpg,instagram,facebook</pre>
+        <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+          <strong>Colunas obrigatórias:</strong> date (YYYY-MM-DD), time (HH:MM), message<br>
+          <strong>Opcionais:</strong> image_url, platforms (padrão: instagram,facebook)
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Upload</div>
+        <div id="upload-alert"></div>
+        <div class="drop-zone" id="drop-zone">
+          <input type="file" id="file-input" accept=".csv,.txt">
+          <div class="drop-icon">📂</div>
+          <div class="drop-text"><strong>Clica ou arrasta</strong> o ficheiro CSV / TXT aqui</div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;">
+          <button class="btn btn-primary" onclick="uploadFile()">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            Importar posts
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Posts -->
+    <div id="section-posts" class="section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Todos os Posts</div>
+          <div class="page-sub">Gerir posts agendados e histórico</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="clearPending()" style="font-size:13px;padding:8px 14px;">
+          Limpar pendentes
+        </button>
+      </div>
+      <div class="card" style="padding:0;">
+        <div id="posts-table"></div>
+      </div>
+    </div>
+
+    <!-- Config -->
+    <div id="section-config" class="section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Configurações</div>
+          <div class="page-sub">Credenciais da Meta Graph API</div>
+        </div>
+      </div>
+      <div class="card" style="max-width:520px;">
+        <div class="card-title">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          Meta API Credentials
+        </div>
+        <div id="config-alert"></div>
+        <div class="alert info" style="margin-bottom:20px;">
+          Precisas de um <strong>Facebook Page Access Token</strong> com as permissões <code>pages_manage_posts</code> e <code>instagram_basic, instagram_content_publish</code>.
+          Obtém em <strong>developers.facebook.com → Graph API Explorer</strong>.
+        </div>
+        <div class="form-group">
+          <label>Facebook Page ID</label>
+          <input type="text" id="cfg-fb-page-id" placeholder="Ex: 123456789012345">
+        </div>
+        <div class="form-group">
+          <label>Facebook Page Access Token</label>
+          <input type="password" id="cfg-fb-token" placeholder="EAAxxxxxxxx...">
+        </div>
+        <div class="form-group">
+          <label>Instagram Business Account ID</label>
+          <input type="text" id="cfg-ig-id" placeholder="Ex: 17841400123456789">
+        </div>
+        <button class="btn btn-primary" onclick="saveConfig()">Guardar configurações</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let allPosts = [];
+
+// Navigation
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('section-' + name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    if (b.getAttribute('onclick')?.includes(name)) b.classList.add('active');
+  });
+  if (name === 'dashboard' || name === 'posts') loadPosts();
+  if (name === 'config') loadConfig();
+}
+
+// Drag & drop
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    document.getElementById('file-input').files = e.dataTransfer.files;
+    dropZone.querySelector('.drop-text').innerHTML = `<strong>${file.name}</strong> selecionado`;
+  }
+});
+document.getElementById('file-input').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) dropZone.querySelector('.drop-text').innerHTML = `<strong>${f.name}</strong> selecionado`;
+});
+
+// Upload CSV
+async function uploadFile() {
+  const fileInput = document.getElementById('file-input');
+  const alertEl = document.getElementById('upload-alert');
+  if (!fileInput.files[0]) {
+    alertEl.innerHTML = '<div class="alert error">Seleciona um ficheiro primeiro.</div>';
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  try {
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) {
+      alertEl.innerHTML = `<div class="alert error">${data.error}</div>`;
+    } else {
+      let msg = `<div class="alert success">✓ ${data.added} posts importados com sucesso.</div>`;
+      if (data.errors?.length) {
+        msg += `<div class="alert error">Avisos:<br>${data.errors.join('<br>')}</div>`;
+      }
+      alertEl.innerHTML = msg;
+      fileInput.value = '';
+      dropZone.querySelector('.drop-text').innerHTML = '<strong>Clica ou arrasta</strong> o ficheiro CSV / TXT aqui';
+    }
+  } catch(e) {
+    alertEl.innerHTML = `<div class="alert error">Erro: ${e.message}</div>`;
+  }
+}
+
+// Load & render posts
+async function loadPosts() {
+  const res = await fetch('/api/posts');
+  allPosts = await res.json();
+  renderDashboard();
+  renderPostsTable();
+}
+
+function renderDashboard() {
+  const counts = { total: allPosts.length, pending: 0, published: 0, error: 0 };
+  allPosts.forEach(p => {
+    if (p.status === 'pending') counts.pending++;
+    else if (p.status === 'published') counts.published++;
+    else if (p.status === 'error' || p.status === 'partial') counts.error++;
+  });
+  document.getElementById('s-total').textContent = counts.total;
+  document.getElementById('s-pending').textContent = counts.pending;
+  document.getElementById('s-published').textContent = counts.published;
+  document.getElementById('s-error').textContent = counts.error;
+
+  const next = allPosts.filter(p => p.status === 'pending').slice(0, 5);
+  const el = document.getElementById('next-posts-list');
+  if (!next.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div>Sem posts pendentes</div></div>';
+    return;
+  }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Data/Hora</th><th>Mensagem</th><th>Plataformas</th><th>Estado</th></tr></thead>
+    <tbody>${next.map(p => postRow(p)).join('')}</tbody>
+  </table></div>`;
+}
+
+function renderPostsTable() {
+  const el = document.getElementById('posts-table');
+  if (!allPosts.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div>Nenhum post encontrado.<br>Importa um CSV para começar.</div></div>';
+    return;
+  }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Data/Hora (UTC)</th><th>Mensagem</th><th>Imagem</th><th>Plataformas</th><th>Estado</th><th>Ações</th></tr></thead>
+    <tbody>${allPosts.map(p => postRow(p, true)).join('')}</tbody>
+  </table></div>`;
+}
+
+function postRow(p, showActions = false) {
+  const platforms = p.platforms.split(',').map(pl => {
+    const t = pl.trim();
+    return `<span class="platform-tag ${t === 'facebook' ? 'fb' : 'ig'}">${t === 'facebook' ? 'FB' : 'IG'}</span>`;
+  }).join('');
+
+  const imgCell = p.image_url
+    ? `<a href="${p.image_url}" target="_blank" style="color:var(--accent);font-size:12px;">Ver</a>`
+    : '<span style="color:var(--muted)">—</span>';
+
+  const errHtml = p.error ? `<div class="err-text" title="${p.error}">${p.error.substring(0,80)}${p.error.length>80?'…':''}</div>` : '';
+
+  const actions = showActions ? `
+    <td>
+      <div style="display:flex;gap:6px;">
+        ${p.status !== 'published' ? `<button class="btn btn-ghost btn-sm" onclick="deletePost(${p.id})">🗑</button>` : ''}
+        ${p.status === 'error' || p.status === 'partial' ? `<button class="btn btn-ghost btn-sm" onclick="retryPost(${p.id})">↺</button>` : ''}
+      </div>
+    </td>` : '';
+
+  const idCell = showActions ? `<td style="color:var(--muted);font-size:12px;">#${p.id}</td>` : '';
+  const imgColCell = showActions ? `<td>${imgCell}</td>` : '';
+
+  return `<tr>
+    ${idCell}
+    <td style="white-space:nowrap;font-size:13px;">${p.scheduled_at}</td>
+    <td class="msg-cell">${escHtml(p.message)}${errHtml}</td>
+    ${imgColCell}
+    <td><div class="platforms">${platforms}</div></td>
+    <td><span class="badge ${p.status}">${p.status}</span></td>
+    ${actions}
+  </tr>`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function deletePost(id) {
+  await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+  loadPosts();
+}
+
+async function retryPost(id) {
+  await fetch(`/api/posts/${id}/retry`, { method: 'POST' });
+  loadPosts();
+}
+
+async function clearPending() {
+  if (!confirm('Apagar todos os posts pendentes?')) return;
+  await fetch('/api/posts', { method: 'DELETE' });
+  loadPosts();
+}
+
+// Config
+async function loadConfig() {
+  const res = await fetch('/api/config');
+  const cfg = await res.json();
+  if (cfg.fb_page_id) document.getElementById('cfg-fb-page-id').value = cfg.fb_page_id;
+  if (cfg.fb_page_token) document.getElementById('cfg-fb-token').value = cfg.fb_page_token;
+  if (cfg.ig_account_id) document.getElementById('cfg-ig-id').value = cfg.ig_account_id;
+}
+
+async function saveConfig() {
+  const data = {
+    fb_page_id: document.getElementById('cfg-fb-page-id').value.trim(),
+    fb_page_token: document.getElementById('cfg-fb-token').value.trim(),
+    ig_account_id: document.getElementById('cfg-ig-id').value.trim(),
+  };
+  const res = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  const alertEl = document.getElementById('config-alert');
+  if (res.ok) {
+    alertEl.innerHTML = '<div class="alert success">✓ Configurações guardadas.</div>';
+    setTimeout(() => alertEl.innerHTML = '', 3000);
+  } else {
+    alertEl.innerHTML = '<div class="alert error">Erro ao guardar.</div>';
+  }
+}
+
+// Auto-refresh every 30s
+loadPosts();
+setInterval(loadPosts, 30000);
+</script>
+</body>
+</html>
