@@ -422,62 +422,83 @@ if (typeof window.kBrothersInjected === 'undefined') {
         return;
       }
 
-      // STEP 5: DOWNLOAD
-      relatarProgresso(originalIndex, "running", "Passo 5: A guardar ficheiro...");
+      // STEP 5: DOWNLOAD — Grok generates 2 versions (draft + enhanced); try to save both.
+      // First file: nomeLimpo.mp4 | Second file (if found): nomeLimpo_2.mp4
+      relatarProgresso(originalIndex, "running", "Passo 5: A guardar ficheiro(s)...");
       let ficheiroSalvo = false;
       const nomeLimpo = titulo.replace(/[^a-zA-Z0-9\s_-]/g, '').trim().replace(/\s+/g, '_') || 'KBrothers_Media';
       const pastaOutput = config.folder
         ? config.folder.replace(/[^a-zA-Z0-9\s_-]/g, '').trim().replace(/\s+/g, '_') + '/'
         : '';
       const extensao = config.media === 'video' ? '.mp4' : '.png';
-      const nomeFicheiro = pastaOutput + nomeLimpo + extensao;
 
-      for (let tentaDown = 1; tentaDown <= 5; tentaDown++) {
+      // Shared download helper — blob→dataURL path for correct filename; <a> fallback
+      const descarregarUrl = async (url, nomeFich) => {
+        if (url.startsWith('blob:')) {
+          try {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            const dataUrl = await new Promise(resolve => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.readAsDataURL(blob);
+            });
+            chrome.runtime.sendMessage({ action: "download_media", url: dataUrl, filename: nomeFich });
+            return true;
+          } catch {
+            await chrome.runtime.sendMessage({ action: "expect_download", filename: nomeFich });
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nomeFich; // full filename with extension
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            return true;
+          }
+        } else if (!url.startsWith('data:')) {
+          chrome.runtime.sendMessage({ action: "download_media", url, filename: nomeFich });
+          return true;
+        }
+        return false;
+      };
+
+      const urlsDescarregadas = [];
+
+      for (let tentaDown = 1; tentaDown <= 10; tentaDown++) {
         await esperar(2000);
 
-        const urlFinalDownload = obterMediaUrl(config.media, urlsAnteriores);
+        const blacklist = [...urlsAnteriores, ...urlsDescarregadas];
+        const urlAtual = obterMediaUrl(config.media, blacklist);
 
-        if (urlFinalDownload) {
-          if (urlFinalDownload.startsWith('blob:')) {
-            // Fetch the blob from the page context (content script has access),
-            // convert to a data URL and send to background. background.js then calls
-            // chrome.downloads.download({ url: dataUrl, filename }) which guarantees
-            // the correct filename — bypassing <a> tag / onDeterminingFilename issues.
-            try {
-              relatarProgresso(originalIndex, "running", "Passo 5: A preparar ficheiro...");
-              const res = await fetch(urlFinalDownload);
-              const blob = await res.blob();
-              const dataUrl = await new Promise(resolve => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.readAsDataURL(blob);
-              });
-              chrome.runtime.sendMessage({ action: "download_media", url: dataUrl, filename: nomeFicheiro });
-              relatarProgresso(originalIndex, "done", `Guardado: ${nomeFicheiro}`);
-              ficheiroSalvo = true;
-              break;
-            } catch (fetchErr) {
-              // Fallback: <a> tag click (less reliable for filename)
-              await chrome.runtime.sendMessage({ action: "expect_download", filename: nomeFicheiro });
-              const a = document.createElement('a');
-              a.href = urlFinalDownload;
-              a.download = nomeLimpo;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              relatarProgresso(originalIndex, "done", `Guardado: ${nomeFicheiro}`);
-              ficheiroSalvo = true;
-              break;
-            }
-          } else if (!urlFinalDownload.startsWith('data:')) {
-            chrome.runtime.sendMessage({ action: "download_media", url: urlFinalDownload, filename: nomeFicheiro });
-            relatarProgresso(originalIndex, "done", `Guardado: ${nomeFicheiro}`);
+        if (urlAtual) {
+          const sufixo = urlsDescarregadas.length === 0 ? '' : `_${urlsDescarregadas.length + 1}`;
+          const nomeFicheiroAtual = pastaOutput + nomeLimpo + sufixo + extensao;
+          relatarProgresso(originalIndex, "running", `Passo 5: A guardar vídeo ${urlsDescarregadas.length + 1}...`);
+          const ok = await descarregarUrl(urlAtual, nomeFicheiroAtual);
+          if (ok) {
+            urlsDescarregadas.push(urlAtual);
             ficheiroSalvo = true;
-            break;
+
+            if (config.media !== 'video') break; // images: only one needed
+
+            // After first video, try carousel "next" button if Grok shows results in slider
+            if (urlsDescarregadas.length === 1) {
+              const btnNext = Array.from(document.querySelectorAll('button, [role="button"]')).find(el => {
+                const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+                return aria.includes('next') || aria.includes('próxim') || aria.includes('seguinte');
+              });
+              if (btnNext) { btnNext.click(); await esperar(1500); }
+              continue; // wait then look for second video
+            }
+
+            break; // both videos downloaded
           }
         }
 
-        // Fallback: native download buttons
+        // After 3 retries with no second video, call it done
+        if (ficheiroSalvo && tentaDown >= 4) break;
+      }
+
+      // Final fallback: click Grok's native download buttons
+      if (!ficheiroSalvo) {
         const botoesDownload = Array.from(document.querySelectorAll('button, a, [role="button"]')).filter(el => {
           const aria = (el.getAttribute('aria-label') || '').toLowerCase();
           const title = (el.getAttribute('title') || '').toLowerCase();
@@ -485,17 +506,22 @@ if (typeof window.kBrothersInjected === 'undefined') {
           return aria.includes('download') || aria.includes('baixar') || aria.includes('guardar') ||
             aria.includes('save') || title.includes('download') || inner.includes('<title>download</title>');
         });
-
         if (botoesDownload.length > 0) {
-          await chrome.runtime.sendMessage({ action: "expect_download", filename: nomeFicheiro });
+          const nomeFich = pastaOutput + nomeLimpo + extensao;
+          await chrome.runtime.sendMessage({ action: "expect_download", filename: nomeFich });
           botoesDownload[botoesDownload.length - 1].click();
-          relatarProgresso(originalIndex, "done", `Guardado via botão nativo: ${nomeFicheiro}`);
           ficheiroSalvo = true;
-          break;
+          relatarProgresso(originalIndex, "running", `Guardado via botão: ${nomeFich}`);
         }
       }
 
-      if (!ficheiroSalvo) {
+      if (ficheiroSalvo) {
+        const conta = urlsDescarregadas.length;
+        const msg = conta > 1
+          ? `${conta} vídeos guardados: ${nomeLimpo}.mp4 + ${nomeLimpo}_2.mp4`
+          : `Guardado: ${pastaOutput + nomeLimpo + extensao}`;
+        relatarProgresso(originalIndex, "done", msg);
+      } else {
         relatarProgresso(originalIndex, "error", "Erro: Não foi possível descarregar o ficheiro gerado.");
       }
 
