@@ -231,6 +231,7 @@ if (typeof window.kBrothersInjected === 'undefined') {
       relatarProgresso(originalIndex, "running", "Passo 2: A escrever o prompt...");
       let pedidoEnviado = false;
       let urlsAnteriores = [];
+      let jaEnviouPedido = false; // guard: prevents submitting the same prompt twice
 
       for (let tentativa = 1; tentativa <= 15; tentativa++) {
         const modalAberto = Array.from(document.querySelectorAll(
@@ -291,18 +292,19 @@ if (typeof window.kBrothersInjected === 'undefined') {
           const btnSend = botoesSend.reverse().find(b => b.offsetWidth > 0 && !b.disabled);
           urlsAnteriores = obterTodasUrlsMedia(config.media);
 
-          if (btnSend) {
-            btnSend.click();
-          } else if (images.length === 0) {
-            // Only use keyboard Enter when there are no attached images.
-            // If images are present and the send button is disabled, Grok is still
-            // processing the uploads — using Enter would skip the reference images.
-            tx.dispatchEvent(new KeyboardEvent('keydown', {
-              key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
-            }));
-          } else {
-            // Images attached but send button still disabled — wait for next iteration
-            relatarProgresso(originalIndex, "running", `Passo 3: A aguardar que o Grok processe as imagens...`);
+          if (!jaEnviouPedido) {
+            if (btnSend) {
+              jaEnviouPedido = true;
+              btnSend.click();
+            } else if (images.length === 0) {
+              jaEnviouPedido = true;
+              tx.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
+              }));
+            } else {
+              // Images attached but send button still disabled — wait for next iteration
+              relatarProgresso(originalIndex, "running", `Passo 3: A aguardar que o Grok processe as imagens...`);
+            }
           }
 
           await esperar(3000);
@@ -333,7 +335,6 @@ if (typeof window.kBrothersInjected === 'undefined') {
       let geracaoTerminada = false;
       let urlEmProcessamento = null;
       let contadorEstabilidade = 0;
-      let contadorBotaoDownload = 0;
       const maxIteracoes = config.media === 'video' ? 300 : 150; // 10min / 5min
 
       for (let t = 1; t <= maxIteracoes; t++) {
@@ -357,44 +358,36 @@ if (typeof window.kBrothersInjected === 'undefined') {
           break;
         }
 
-        // Primary signal: native download button visible without stop button = generation done
-        const btnDownloadNativo = Array.from(document.querySelectorAll('button, a, [role="button"]')).find(el => {
-          const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-          const title = (el.getAttribute('title') || '').toLowerCase();
-          return aria.includes('download') || aria.includes('baixar') || aria.includes('guardar') ||
-            aria.includes('save') || title.includes('download');
-        });
-
-        if (btnDownloadNativo && !btnStop) {
-          contadorBotaoDownload++;
-          if (contadorBotaoDownload >= 5) { // 10s stable with download button = final version ready
-            relatarProgresso(originalIndex, "running", "Passo 4 Concluído: Ficheiro pronto para download!");
-            geracaoTerminada = true;
-            break;
-          }
-        } else {
-          contadorBotaoDownload = 0;
-        }
-
         if (urlVerificacao) {
           if (urlVerificacao !== urlEmProcessamento) {
-            // URL changed — Grok started a second enhancement pass; reset stability counter
+            // URL changed (draft → enhanced pass) — reset stability counter
             urlEmProcessamento = urlVerificacao;
             contadorEstabilidade = 0;
-            contadorBotaoDownload = 0;
-            relatarProgresso(originalIndex, "running", `Passo 4: Nova versão detetada, a aguardar melhoria...`);
+            relatarProgresso(originalIndex, "running", `Passo 4: Nova versão detetada, a aguardar estabilização...`);
           } else if (!btnStop) {
-            contadorEstabilidade++;
-            // Wait 20 stable iterations (40s). If the URL changes (draft→final enhancement),
-            // the counter resets so we always capture the enhanced video.
-            if (contadorEstabilidade >= 20) {
-              relatarProgresso(originalIndex, "running", "Passo 4 Concluído: Versão final confirmada!");
-              geracaoTerminada = true;
-              break;
+            // Only count stability when the video element is actually loaded/playable.
+            // Blank/initialising blob videos have duration=0, readyState<3, videoWidth=0.
+            const videoEl = Array.from(document.querySelectorAll('video')).find(v => {
+              const vSrc = v.src && !v.src.startsWith('blob:null') ? v.src : v.querySelector('source')?.src || '';
+              return vSrc === urlEmProcessamento;
+            });
+            const videoCarregado = !videoEl ||
+              videoEl.duration > 0 || videoEl.readyState >= 3 || videoEl.videoWidth > 0;
+
+            if (videoCarregado) {
+              contadorEstabilidade++;
+              if (contadorEstabilidade >= 20) {
+                relatarProgresso(originalIndex, "running", "Passo 4 Concluído: Versão final confirmada!");
+                geracaoTerminada = true;
+                break;
+              } else {
+                relatarProgresso(originalIndex, "running", `Passo 4: A confirmar versão final (${contadorEstabilidade}/20)...`);
+              }
             } else {
-              relatarProgresso(originalIndex, "running", `Passo 4: A confirmar versão final (${contadorEstabilidade}/20)...`);
+              relatarProgresso(originalIndex, "running", `Passo 4: Vídeo a inicializar... (${t * 2}s)`);
             }
           } else {
+            contadorEstabilidade = 0;
             relatarProgresso(originalIndex, "running", `Passo 4: IA a processar...`);
           }
         } else {
