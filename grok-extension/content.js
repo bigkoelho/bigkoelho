@@ -375,15 +375,18 @@ if (typeof window.kBrothersInjected === 'undefined') {
               videoEl.duration > 0 || videoEl.readyState >= 3 || videoEl.videoWidth > 0;
 
             if (videoCarregado) {
+              // Stop button gone + video has real content → ready to download immediately.
+              // Step 5 will then wait for the second enhanced version.
+              relatarProgresso(originalIndex, "running", "Passo 4 Concluído: Primeiro vídeo pronto!");
+              geracaoTerminada = true;
+              break;
+            } else {
               contadorEstabilidade++;
-              if (contadorEstabilidade >= 20) {
-                relatarProgresso(originalIndex, "running", "Passo 4 Concluído: Versão final confirmada!");
+              if (contadorEstabilidade >= 10) { // 20s fallback if video stays unloaded
+                relatarProgresso(originalIndex, "running", "Passo 4 Concluído: A avançar.");
                 geracaoTerminada = true;
                 break;
-              } else {
-                relatarProgresso(originalIndex, "running", `Passo 4: A confirmar versão final (${contadorEstabilidade}/20)...`);
               }
-            } else {
               relatarProgresso(originalIndex, "running", `Passo 4: Vídeo a inicializar... (${t * 2}s)`);
             }
           } else {
@@ -461,14 +464,30 @@ if (typeof window.kBrothersInjected === 'undefined') {
       };
 
       const urlsDescarregadas = [];
+      // Phase 1: up to 20s to get the first video.
+      // Phase 2: after first download, wait up to 60s for the enhanced second version.
+      let maxIteracoes5 = 10;
 
-      for (let tentaDown = 1; tentaDown <= 10; tentaDown++) {
+      for (let tentaDown = 1; tentaDown <= maxIteracoes5; tentaDown++) {
         await esperar(2000);
 
         const blacklist = [...urlsAnteriores, ...urlsDescarregadas];
         const urlAtual = obterMediaUrl(config.media, blacklist);
 
         if (urlAtual) {
+          // Confirm the video element is actually loaded before saving
+          const videoEl5 = Array.from(document.querySelectorAll('video')).find(v => {
+            const vSrc = v.src && !v.src.startsWith('blob:null') ? v.src : v.querySelector('source')?.src || '';
+            return vSrc === urlAtual;
+          });
+          const videoCarregado5 = !videoEl5 ||
+            videoEl5.duration > 0 || videoEl5.readyState >= 2 || videoEl5.videoWidth > 0;
+
+          if (!videoCarregado5 && urlsDescarregadas.length === 0) {
+            relatarProgresso(originalIndex, "running", `Passo 5: Vídeo a carregar...`);
+            continue;
+          }
+
           const sufixo = urlsDescarregadas.length === 0 ? '' : `_${urlsDescarregadas.length + 1}`;
           const nomeFicheiroAtual = pastaOutput + nomeLimpo + sufixo + extensao;
           relatarProgresso(originalIndex, "running", `Passo 5: A guardar vídeo ${urlsDescarregadas.length + 1}...`);
@@ -477,24 +496,27 @@ if (typeof window.kBrothersInjected === 'undefined') {
             urlsDescarregadas.push(urlAtual);
             ficheiroSalvo = true;
 
-            if (config.media !== 'video') break; // images: only one needed
+            if (config.media !== 'video') break; // images: only one
 
-            // After first video, try carousel "next" button if Grok shows results in slider
             if (urlsDescarregadas.length === 1) {
+              // Extend timeout to wait for the enhanced second version (up to 60s more)
+              maxIteracoes5 = tentaDown + 30;
+              relatarProgresso(originalIndex, "running", `Guardado vídeo 1 (${nomeLimpo}${extensao}). A aguardar versão melhorada...`);
+              // Try carousel "next" button if Grok presents results in a slider
               const btnNext = Array.from(document.querySelectorAll('button, [role="button"]')).find(el => {
                 const aria = (el.getAttribute('aria-label') || '').toLowerCase();
                 return aria.includes('next') || aria.includes('próxim') || aria.includes('seguinte');
               });
               if (btnNext) { btnNext.click(); await esperar(1500); }
-              continue; // wait then look for second video
+              continue;
             }
 
-            break; // both videos downloaded
+            break; // both videos saved
           }
         }
 
-        // After 3 retries with no second video, call it done
-        if (ficheiroSalvo && tentaDown >= 4) break;
+        // Give up on second video after timeout
+        if (ficheiroSalvo && tentaDown >= maxIteracoes5) break;
       }
 
       // Final fallback: click Grok's native download buttons

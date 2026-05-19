@@ -51,6 +51,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       processNext();
       break;
     case "download_media":
+      // Set expectedFilename BEFORE starting the download so onDeterminingFilename
+      // always overwrites Chrome's default suggestion with our explicit name.
+      expectedFilename = message.filename;
       chrome.downloads.download({ url: message.url, filename: message.filename });
       break;
   }
