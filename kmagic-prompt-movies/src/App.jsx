@@ -3823,40 +3823,79 @@ Responde APENAS com o texto da sinopse + hashtags. Sem títulos, sem explicaçõ
     ).join('\n');
 
     if (type === 'full-script') {
-      return `Atua como realizador, argumentista e diretor de arte. Cria TUDO o que é necessário para produzir o filme "${title}" (${filmType}, estilo ${artStyle}, género: ${genre}, língua: ${lang}).
+      return `Atua como realizador, argumentista e diretor de arte de topo. Cria TUDO o que é necessário para produzir o filme "${title}" (${filmType}, estilo ${artStyle}, género: ${genre}, língua: ${lang}).
 
 LOGLINE / HISTÓRIA: ${logline}
+${script ? `\nGUIÃO EXISTENTE (referência):\n${script}\n` : ''}
+Gera textos narrativos em PORTUGUÊS DE PORTUGAL (PT-PT) EXCLUSIVAMENTE. Prompts visuais (visualPromptEN, description dos cenários/personagens) SEMPRE em inglês (EN), ricos e detalhados.
 
-Gera em PORTUGUÊS DE PORTUGAL (PT-PT) EXCLUSIVAMENTE. Prompts de imagem/vídeo SEMPRE em inglês (EN).
-
-SCHEMA JSON OBRIGATÓRIO (devolve APENAS este JSON, sem texto extra):
+SCHEMA JSON OBRIGATÓRIO (devolve APENAS este JSON, sem texto extra, sem markdown):
 {
-  "script": "Guião completo dividido em Ato I - Exposição, Ato II - Confronto, Ato III - Resolução. Formatado com parágrafos descritivos. Mínimo 600 palavras.",
+  "script": "Guião completo dividido em Ato I - Exposição, Ato II - Confronto, Ato III - Resolução. Formatado com parágrafos descritivos, indicações de cena, diálogos entre personagens. Mínimo 800 palavras.",
   "characters": [
-    { "id": "char_1", "name": "Nome PT", "description": "Detailed visual description EN for 3D animation generation, physical appearance, clothing, expression", "physical": { "height": "170", "build": "Normal" }, "voicePrompt": "Descrição da voz PT: tom, velocidade, sotaque, emoção típica" }
+    {
+      "id": "char_1",
+      "name": "Nome da Personagem PT",
+      "description": "VERY DETAILED visual description in English for 3D ${artStyle} generation: exact hair color/style, eye color, skin tone, facial features, body type/height/build, full outfit description (fabric, color, accessories), characteristic pose and expression, age range, distinguishing marks",
+      "physical": { "height": "170", "build": "Normal" },
+      "voicePrompt": "Descrição detalhada da voz em PT-PT: tom (grave/agudo/médio), velocidade de fala, sotaque regional, timbre, emoção predominante, estilo de dicção"
+    }
   ],
   "settings": [
-    { "id": "set_1", "name": "Nome do Local PT", "description": "Detailed visual description EN for 3D scene generation, lighting, atmosphere, key elements" }
+    {
+      "id": "set_1",
+      "name": "Nome do Local PT",
+      "description": "VERY DETAILED visual description in English for 3D scene generation: architecture style, dominant colors, lighting conditions (time of day, artificial/natural light, shadows), atmosphere, key props and furniture, floor/wall/ceiling materials, background elements, mood/feeling of the space"
+    }
   ],
   "scenes": [
-    { "id": "scene_1", "description": "Descrição breve da cena PT",
+    {
+      "id": "scene_1",
+      "title": "Título curto da cena PT",
+      "description": "Descrição narrativa completa da cena em PT-PT: o que acontece, o conflito ou emoção central, como avança a história",
       "takes": [
-        { "id": "take_1_1", "settingId": "set_1", "action": "Descrição detalhada da ação PT", "narration": "Narração em voz-off PT (pode ser vazio)", "duration": 5, "visualPromptEN": "Cinematic shot of [CHARACTER NAME] in [SETTING NAME], action description, ${filmType} style, ${artStyle}, 16:9 aspect ratio" }
+        {
+          "id": "take_1_1",
+          "settingId": "set_1",
+          "characterIds": ["char_1", "char_2"],
+          "camera": "Specific camera shot in English: e.g. Close-up, Medium shot, Wide establishing shot, Over-the-shoulder, Low angle, Dutch angle, Tracking shot",
+          "action": "Descrição detalhada e cinematográfica da ação em PT-PT: o que cada personagem faz, como se move, expressões faciais, gestos específicos",
+          "narration": "Texto de narração em voz-off PT-PT (deixa vazio se não houver narrador)",
+          "dialogues": [
+            {
+              "characterName": "Nome Exato da Personagem",
+              "text": "Fala completa da personagem em PT-PT, com toda a emoção e nuance",
+              "emotion": "emoção específica: raiva / tristeza / alegria / medo / surpresa / determinação / etc"
+            }
+          ],
+          "duration": 6,
+          "visualPromptEN": "RICH DETAILED cinematic prompt in English: [CAMERA SHOT TYPE], [CHARACTER NAME(S)] in [SETTING NAME], [specific action/pose/movement], [facial expression and emotion], [lighting: warm/cool/dramatic/soft, direction of light], [atmosphere: tense/joyful/mysterious/epic], [color palette], [depth of field], [background details], ${filmType} style, ${artStyle}, high quality render, cinematic composition, aspect ratio ${projectData.aspectRatio || '16:9'}"
+        }
       ]
     }
   ],
   "finalMessages": [
-    { "id": "fm_1", "userInput": "Texto sobreposto na imagem PT", "action": "Descrição da ação PT", "camera": "Camera angle EN", "duration": 5, "visualPromptEN": "Cinematic background scene EN for text overlay, ${filmType} style, ${artStyle}" }
+    {
+      "id": "fm_1",
+      "userInput": "Texto de impacto/moral exato a sobrepor PT",
+      "action": "Descrição cinematográfica da ação de fundo PT",
+      "camera": "Camera angle EN",
+      "duration": 6,
+      "visualPromptEN": "Atmospheric cinematic background in English for text overlay: [SETTING NAME or abstract background], [mood/lighting], [subtle motion], ${filmType} style, ${artStyle}, with bold text overlay reading '[EXACT TEXT]', aspect ratio ${projectData.aspectRatio || '16:9'}"
+    }
   ]
 }
 
-REGRAS CRÍTICAS:
-- Nos campos visualPromptEN usa SEMPRE o NOME da personagem/cenário, NUNCA descrições físicas
-- Personagens (usa estes nomes nos prompts): cria entre 3 a 5 personagens relevantes
-- Cenários: cria entre 3 a 6 cenários/locais
-- Cenas: mínimo 6 cenas, cada uma com 2 a 4 takes
-- Mensagens Finais: 2 a 3 mensagens de impacto/moral
-- Cada take máximo 5-8 segundos de duração`;
+REGRAS CRÍTICAS — LÊ COM ATENÇÃO:
+- visualPromptEN: usa SEMPRE o NOME EXATO da personagem e do cenário (ex: "João" e "Sala de Jantar"), NUNCA descrições físicas genéricas — o software de renderização faz a correspondência automática com as imagens de referência
+- characterIds nos takes: usa os IDs exatos definidos no array "characters" (char_1, char_2, etc.)
+- Personagens: cria entre 3 a 5 personagens com descriptions MUITO detalhadas em inglês
+- Cenários: cria entre 3 a 6 locais com descriptions MUITO detalhadas em inglês
+- Cenas: mínimo 8 cenas com arco narrativo completo, cada uma com 2 a 4 takes
+- Takes: cada take é um plano cinematográfico único com camera específica, diálogos reais e prompt visual rico
+- Dialogues: inclui TODOS os diálogos reais da cena — nunca deixes o array vazio se houver fala
+- Mensagens Finais: 2 a 3 mensagens de impacto emocional/moral
+- Duração por take: 5 a 8 segundos`;
 
     } else if (type === 'social') {
       return `Atua como diretor de marketing digital. Cria TODO o material promocional para lançamento online do filme "${title}" (${filmType}).
@@ -3939,28 +3978,45 @@ Devolve APENAS este JSON:
     const toArr = (v) => Array.isArray(v) ? v : (v && typeof v === 'object' && !Array.isArray(v) ? Object.values(v) : []);
 
     // Transforma um take do Gemini (pode ter schema diferente) para o schema da app
-    const transformTake = (t, si, ti, ts) => {
-      // Extrai narração: do campo narration, ou dos dialogues, ou vazio
-      let narration = t.narration || '';
-      if (!narration && t.dialogues && t.dialogues.length > 0) {
-        narration = t.dialogues.map(d => `${d.characterName || ''}: "${d.text || ''}"`).join(' / ');
+    const transformTake = (t, si, ti, ts, allChars) => {
+      const narration = t.narration || '';
+
+      // Preserva dialogues estruturados vindos da IA (array de {characterName, text, emotion})
+      let dialogues = [];
+      if (Array.isArray(t.dialogues) && t.dialogues.length > 0) {
+        dialogues = t.dialogues.map(d => ({
+          characterName: d.characterName || d.name || '',
+          text: d.text || d.dialogue || d.line || '',
+          emotion: d.emotion || ''
+        })).filter(d => d.text);
       }
+
+      // Resolve characterIds: tenta usar os fornecidos, senão faz match por nome com os chars criados
+      let characterIds = Array.isArray(t.characterIds) ? t.characterIds : [];
+      if (characterIds.length === 0 && dialogues.length > 0 && allChars) {
+        const nameSet = [...new Set(dialogues.map(d => d.characterName).filter(Boolean))];
+        characterIds = nameSet.map(n => {
+          const found = allChars.find(c => (c.name || '').toLowerCase() === n.toLowerCase());
+          return found ? found.id : null;
+        }).filter(Boolean);
+      }
+
       // Extrai prompt visual: do campo visualPromptEN, ou constrói a partir da ação+câmara
       const visualPromptEN = t.visualPromptEN ||
         (t.action ? `Cinematic ${t.camera || 'medium shot'} of ${t.action}` : '');
+
       return {
         id: t.id || `take_pkg_${ts}_${si}_${ti}`,
         settingId: t.settingId || '',
+        characterIds,
         action: t.action || '',
         narration,
         duration: typeof t.duration === 'number' ? t.duration : 5,
         visualPromptEN,
-        hasSubtitle: t.hasSubtitle !== false,
-        // Preserva campos extras do Gemini para não perder info
-        camera: t.camera,
-        sound: t.sound,
-        dialogues: t.dialogues,
-        characterIds: t.characterIds
+        camera: t.camera || '',
+        sound: t.sound || '',
+        dialogues,
+        hasSubtitle: t.hasSubtitle !== false
       };
     };
 
@@ -3982,7 +4038,7 @@ Devolve APENAS este JSON:
             id: sc.id||`scene_pkg_${ts}_${si}`,
             title: sc.title || sc.description || `Cena ${si+1}`,
             description: sc.description || sc.title || '',
-            takes: toArr(sc.takes).map((t,ti) => transformTake(t, si, ti, ts))
+            takes: toArr(sc.takes).map((t,ti) => transformTake(t, si, ti, ts, newData.characters || []))
           }));
         }
         const fms = toArr(parsed.finalMessages);
