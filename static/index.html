@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transcrever — Áudio para Texto</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>Transcrever</h1>
+      <p class="sub">Converta áudio e vídeo em texto com Whisper, localmente.</p>
+    </header>
+
+    <section id="dropzone" class="dropzone">
+      <input type="file" id="fileInput" accept="audio/*,video/*" hidden>
+      <div class="dz-inner">
+        <svg viewBox="0 0 24 24" class="dz-icon" aria-hidden="true">
+          <path d="M12 16V4m0 0L8 8m4-4 4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+        </svg>
+        <p class="dz-title">Arraste um arquivo aqui</p>
+        <p class="dz-hint">ou <button type="button" id="browseBtn" class="link">escolha do computador</button></p>
+        <p class="dz-formats">MP3 · WAV · M4A · OGG · FLAC · MP4 · WEBM — até 200 MB</p>
+      </div>
+    </section>
+
+    <div class="or"><span>ou</span></div>
+
+    <section class="record">
+      <button type="button" id="recordBtn" class="btn-record">
+        <span class="dot"></span><span id="recordLabel">Gravar do microfone</span>
+      </button>
+      <span id="recordTime" class="rec-time" hidden>00:00</span>
+    </section>
+
+    <section id="fileCard" class="file-card" hidden>
+      <div class="fc-info">
+        <span id="fileName" class="fc-name"></span>
+        <span id="fileSize" class="fc-size"></span>
+      </div>
+      <button type="button" id="clearBtn" class="btn-clear" aria-label="Remover arquivo">&times;</button>
+    </section>
+
+    <section class="options">
+      <label>
+        <span>Idioma</span>
+        <select id="language">
+          <option value="">Detectar automaticamente</option>
+          <option value="pt">Português</option>
+          <option value="en">Inglês</option>
+          <option value="es">Espanhol</option>
+          <option value="fr">Francês</option>
+          <option value="de">Alemão</option>
+          <option value="it">Italiano</option>
+          <option value="ja">Japonês</option>
+          <option value="zh">Chinês</option>
+        </select>
+      </label>
+      <label>
+        <span>Tarefa</span>
+        <select id="task">
+          <option value="transcribe">Transcrever</option>
+          <option value="translate">Traduzir para inglês</option>
+        </select>
+      </label>
+    </section>
+
+    <button type="button" id="submitBtn" class="btn-primary" disabled>Transcrever</button>
+
+    <section id="status" class="status" hidden>
+      <div class="spinner"></div>
+      <span id="statusText">Processando…</span>
+    </section>
+
+    <section id="error" class="error" hidden></section>
+
+    <section id="result" class="result" hidden>
+      <div class="meta">
+        <span id="metaLang" class="chip"></span>
+        <span id="metaDuration" class="chip"></span>
+        <span id="metaSegments" class="chip"></span>
+      </div>
+
+      <nav class="tabs" role="tablist">
+        <button type="button" class="tab active" data-tab="text" role="tab">Texto</button>
+        <button type="button" class="tab" data-tab="segments" role="tab">Segmentos</button>
+        <button type="button" class="tab" data-tab="srt" role="tab">SRT</button>
+        <button type="button" class="tab" data-tab="vtt" role="tab">VTT</button>
+      </nav>
+
+      <div class="panel" id="panel-text"><p id="outText"></p></div>
+      <div class="panel" id="panel-segments" hidden><ul id="outSegments" class="segments"></ul></div>
+      <div class="panel" id="panel-srt" hidden><pre id="outSrt"></pre></div>
+      <div class="panel" id="panel-vtt" hidden><pre id="outVtt"></pre></div>
+
+      <div class="actions">
+        <button type="button" id="copyBtn" class="btn-ghost">Copiar</button>
+        <button type="button" id="downloadBtn" class="btn-ghost">Baixar</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
