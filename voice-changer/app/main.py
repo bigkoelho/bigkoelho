@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import audio
 from .config import get_settings
-from .engines import describe_engines, get_engine, reset_engines
+from .engines import COQUI_MODELS, describe_engines, get_engine, reset_engines
 from .engines.base import EngineError
 from .jobs import Job, JobStatus, JobStore
 from .pipeline import ConversionOptions, convert_file
@@ -122,7 +122,18 @@ def health() -> dict:
 def engines() -> dict:
     return {
         "selected": settings.engine,
-        "engines": [info.__dict__ for info in describe_engines(settings)],
+        "selected_model": settings.coqui_model,
+        "engines": [
+            {
+                "key": info.key,
+                "label": info.label,
+                "description": info.description,
+                "available": info.available,
+                "detail": info.detail,
+                "models": [{"key": model.key, "label": model.label} for model in info.models],
+            }
+            for info in describe_engines(settings)
+        ],
     }
 
 
@@ -182,6 +193,7 @@ def convert(
     output_format: str = Form("wav"),
     normalize: bool = Form(True),
     engine: str = Form(""),
+    model: str = Form(""),
 ) -> dict:
     """Queue a conversion. Give either a saved ``voice_id`` or a new ``sample``."""
     _require_ffmpeg()
@@ -191,8 +203,11 @@ def convert(
         raise HTTPException(400, "Formato de saída inválido (usa wav ou mp3).")
 
     engine_key = (engine or settings.engine).lower()
+    model = model.lower().strip()
+    if model and model not in COQUI_MODELS:
+        raise HTTPException(400, f"Modelo desconhecido: {model}. Opções: {', '.join(COQUI_MODELS)}")
     try:
-        selected_engine = get_engine(engine_key, settings)
+        selected_engine = get_engine(engine_key, settings, model)
     except EngineError as exc:
         raise HTTPException(400, str(exc)) from exc
     available, detail = selected_engine.availability()
@@ -232,6 +247,8 @@ def convert(
         raise HTTPException(400, "Escolhe uma voz guardada ou envia uma amostra de voz.")
 
     job = jobs.create(source_name=source.filename or "audio", voice_name=reference_label)
+    job.engine = engine_key
+    job.model = getattr(selected_engine, "model", "")
     job.temp_paths = temp_paths
     job.output_name = f"{Path(source.filename or 'audio').stem}_{_slug(reference_label)}.{output_format}"
     job.output_path = settings.outputs_dir / f"{job.id}.{output_format}"

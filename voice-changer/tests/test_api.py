@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import pytest
+import soundfile as sf
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -50,6 +51,32 @@ def test_engines_are_listed(client: TestClient) -> None:
     assert body["selected"] == "passthrough"
 
 
+def test_local_engine_exposes_its_models(client: TestClient) -> None:
+    engines = client.get("/api/engines").json()["engines"]
+    coqui = next(engine for engine in engines if engine["key"] == "coqui")
+    model_keys = {model["key"] for model in coqui["models"]}
+    assert {"freevc", "openvoice_v2", "knnvc"} <= model_keys
+    assert all(model["label"] for model in coqui["models"])
+    # Engines with a single model must not offer a picker.
+    passthrough = next(engine for engine in engines if engine["key"] == "passthrough")
+    assert passthrough["models"] == []
+
+
+def test_unknown_model_is_rejected(client: TestClient, make_wav) -> None:
+    sample = make_wav("amostra6.wav", seconds=8.0)
+    source = make_wav("origem6.wav", seconds=3.0)
+    response = client.post(
+        "/api/convert",
+        data={"model": "modelo-inventado"},
+        files={
+            "source": (source.name, source.read_bytes(), "audio/wav"),
+            "sample": (sample.name, sample.read_bytes(), "audio/wav"),
+        },
+    )
+    assert response.status_code == 400
+    assert "Modelo desconhecido" in response.json()["detail"]
+
+
 def test_voice_library_roundtrip(client: TestClient, make_wav) -> None:
     sample = make_wav("voz.wav", seconds=8.0)
 
@@ -77,7 +104,7 @@ def test_short_sample_is_rejected(client: TestClient, make_wav) -> None:
     assert "pelo menos" in response.json()["detail"]
 
 
-def test_convert_with_an_uploaded_sample(client: TestClient, make_wav) -> None:
+def test_convert_with_an_uploaded_sample(client: TestClient, make_wav, tmp_path) -> None:
     sample = make_wav("amostra.wav", seconds=8.0, freq=180)
     source = make_wav("origem.wav", seconds=9.0, freq=110)
 
@@ -101,6 +128,11 @@ def test_convert_with_an_uploaded_sample(client: TestClient, make_wav) -> None:
     download = client.get(f"/api/jobs/{job['id']}/download")
     assert download.status_code == 200
     assert len(download.content) > 10000
+
+    # The normalised output must keep the working rate, not loudnorm's 192 kHz.
+    result = tmp_path / "resultado.wav"
+    result.write_bytes(download.content)
+    assert sf.info(str(result)).samplerate == 24000
 
 
 def test_convert_with_a_saved_voice_and_mp3_output(client: TestClient, make_wav) -> None:

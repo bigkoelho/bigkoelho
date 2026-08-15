@@ -98,5 +98,14 @@ def test_prepare_reference_respects_the_cap(make_wav, tmp_path) -> None:
 @requires_ffmpeg
 def test_encode_output_writes_mp3(make_wav, tmp_path) -> None:
     source = make_wav("source.wav", seconds=2.0)
-    out = audio.encode_output(source, tmp_path / "out.mp3", fmt="mp3", normalize=True)
+    out = audio.encode_output(source, tmp_path / "out.mp3", fmt="mp3", normalize=True, sample_rate=24000)
     assert out.exists() and out.stat().st_size > 1000
+
+
+@requires_ffmpeg
+def test_normalised_output_keeps_the_requested_sample_rate(make_wav, tmp_path) -> None:
+    # Regression: loudnorm emits 192 kHz, which made every normalised wav eight
+    # times larger than the model output it came from.
+    source = make_wav("source.wav", seconds=2.0)
+    out = audio.encode_output(source, tmp_path / "out.wav", fmt="wav", normalize=True, sample_rate=24000)
+    assert audio.wav_sample_rate(out) == 24000

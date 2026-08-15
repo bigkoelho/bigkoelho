@@ -217,6 +217,25 @@ async function loadHealth() {
       select.appendChild(option);
     });
 
+    // The model picker only applies to engines that ship more than one model.
+    const syncModels = () => {
+      const engine = engines.engines.find((item) => item.key === select.value);
+      const models = engine?.models ?? [];
+      const row = $('#model-row');
+      row.classList.toggle('hidden', models.length === 0);
+      const modelSelect = $('#model');
+      modelSelect.innerHTML = '';
+      models.forEach((model) => {
+        const option = document.createElement('option');
+        option.value = model.key;
+        option.textContent = model.label;
+        option.selected = model.key === engines.selected_model;
+        modelSelect.appendChild(option);
+      });
+    };
+    select.addEventListener('change', syncModels);
+    syncModels();
+
     const parts = [];
     parts.push(health.ffmpeg ? '<span class="good">ffmpeg ok</span>' : '<span class="bad">ffmpeg em falta</span>');
     const active = engines.engines.find((engine) => engine.key === engines.selected);
@@ -259,6 +278,7 @@ $('#convert').addEventListener('click', async () => {
   body.append('output_format', $('#output-format').value);
   body.append('normalize', $('#normalize').checked ? 'true' : 'false');
   body.append('engine', $('#engine').value);
+  if (!$('#model-row').classList.contains('hidden')) body.append('model', $('#model').value);
 
   $('#convert').disabled = true;
   $('#result-card').classList.add('hidden');
@@ -312,8 +332,10 @@ function showResult(jobId, job) {
   $('#result-converted').src = `/api/jobs/${jobId}/download?inline=true`;
   $('#download').href = `/api/jobs/${jobId}/download`;
   $('#download').setAttribute('download', job.output_name);
+  const engineLabel = job.model ? `${job.engine}/${job.model}` : job.engine;
   $('#result-meta').textContent =
-    `${job.duration.toFixed(1)}s de áudio · ${job.chunks} bloco(s) · ${job.elapsed}s de processamento · voz: ${job.voice_name}`;
+    `${job.duration.toFixed(1)}s de áudio · ${job.chunks} bloco(s) · ${job.elapsed}s de processamento · ` +
+    `voz: ${job.voice_name} · motor: ${engineLabel}`;
   $('#result-card').classList.remove('hidden');
   $('#result-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   refreshConvertButton();

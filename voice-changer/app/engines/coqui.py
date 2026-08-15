@@ -11,13 +11,20 @@ import importlib.util
 import threading
 from pathlib import Path
 
-from .base import EngineError, VoiceConversionEngine
+from .base import EngineError, ModelInfo, VoiceConversionEngine
 
 MODELS: dict[str, str] = {
     "freevc": "voice_conversion_models/multilingual/vctk/freevc24",
     "openvoice_v2": "voice_conversion_models/multilingual/multi-dataset/openvoice_v2",
     "openvoice_v1": "voice_conversion_models/multilingual/multi-dataset/openvoice_v1",
     "knnvc": "voice_conversion_models/multilingual/multi-dataset/knnvc",
+}
+
+MODEL_LABELS: dict[str, str] = {
+    "freevc": "FreeVC 24 kHz — rápido e estável",
+    "openvoice_v2": "OpenVoice v2 — pensado para várias línguas",
+    "openvoice_v1": "OpenVoice v1 — versão anterior",
+    "knnvc": "kNN-VC — precisa de amostras longas",
 }
 
 DEFAULT_MODEL = "freevc"
@@ -49,6 +56,9 @@ class CoquiEngine(VoiceConversionEngine):
         self.device: str | None = None
         self._api = None
         self._lock = threading.Lock()
+
+    def models(self) -> tuple[ModelInfo, ...]:
+        return tuple(ModelInfo(key=key, label=MODEL_LABELS[key]) for key in MODELS)
 
     def availability(self) -> tuple[bool, str]:
         for module in ("torch", "TTS"):

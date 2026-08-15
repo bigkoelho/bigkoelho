@@ -155,7 +155,8 @@ main { max-width: 860px; margin: 0 auto; padding: 12px 20px 64px; }
 }
 
 .options { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); align-items: end; margin-bottom: 18px; }
-.options > label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+/* min-width:0 stops a long option label from forcing its column wider than the card. */
+.options > label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); min-width: 0; }
 /* Needs to out-specify the rule above, which would otherwise turn the row into a grid. */
 .options > label.checkbox { display: flex; align-items: center; justify-content: flex-start; }
 select {
@@ -165,6 +166,8 @@ select {
   color: var(--text);
   padding: 8px 10px;
   font-size: 14px;
+  width: 100%;
+  min-width: 0;
 }
 
 .btn {

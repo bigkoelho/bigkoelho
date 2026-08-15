@@ -12,12 +12,21 @@ class EngineError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class ModelInfo:
+    key: str
+    label: str
+
+
+@dataclass(frozen=True)
 class EngineInfo:
     key: str
     label: str
     description: str
     available: bool
     detail: str = ""
+    # Variants the engine can run; empty when the engine has only one.
+    models: tuple[ModelInfo, ...] = ()
+    selected_model: str = ""
 
 
 class VoiceConversionEngine(abc.ABC):
@@ -39,6 +48,10 @@ class VoiceConversionEngine(abc.ABC):
         """(available, reason) — checked without loading heavy weights."""
         return True, ""
 
+    def models(self) -> tuple[ModelInfo, ...]:
+        """Selectable variants of this engine, if it has more than one."""
+        return ()
+
     def info(self) -> EngineInfo:
         available, detail = self.availability()
         return EngineInfo(
@@ -47,4 +60,6 @@ class VoiceConversionEngine(abc.ABC):
             description=self.description,
             available=available,
             detail=detail,
+            models=self.models(),
+            selected_model=getattr(self, "model", ""),
         )

@@ -109,7 +109,9 @@ def prepare_reference(src: Path, dst: Path, sample_rate: int, max_seconds: int) 
     return dst
 
 
-def encode_output(src: Path, dst: Path, fmt: str, normalize: bool = True) -> Path:
+def encode_output(
+    src: Path, dst: Path, fmt: str, normalize: bool = True, sample_rate: int | None = None
+) -> Path:
     """Render the final file as wav or mp3, optionally loudness-normalised."""
     fmt = fmt.lower()
     if fmt not in {"wav", "mp3"}:
@@ -118,6 +120,10 @@ def encode_output(src: Path, dst: Path, fmt: str, normalize: bool = True) -> Pat
     cmd = [*FFMPEG_BASE, "-i", str(src)]
     if normalize:
         cmd += ["-af", "aresample=async=1,loudnorm=I=-16:TP=-1.5:LRA=11"]
+    # loudnorm always outputs 192 kHz; without pinning the rate the wav ends up eight
+    # times bigger than the model's own output, for no extra quality.
+    if sample_rate:
+        cmd += ["-ar", str(sample_rate)]
     if fmt == "wav":
         cmd += ["-c:a", "pcm_s16le"]
     else:

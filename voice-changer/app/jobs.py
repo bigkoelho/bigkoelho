@@ -35,6 +35,8 @@ class Job:
     finished_at: float | None = None
     source_name: str = ""
     voice_name: str = ""
+    engine: str = ""
+    model: str = ""
     output_path: Path | None = None
     output_name: str = ""
     duration: float = 0.0
@@ -53,6 +55,8 @@ class Job:
             "finished_at": self.finished_at,
             "source_name": self.source_name,
             "voice_name": self.voice_name,
+            "engine": self.engine,
+            "model": self.model,
             "output_name": self.output_name,
             "duration": round(self.duration, 2),
             "chunks": self.chunks,

@@ -56,7 +56,8 @@ uvicorn app.main:app --reload
    já guardada. Entre 10 e 30 segundos de fala limpa (sem música nem ruído de fundo) chegam.
    Marca *Guardar esta voz na biblioteca* para a reutilizares depois sem voltar a enviar a amostra.
 2. **Áudio a converter** — o ficheiro cuja voz vai ser substituída. Aceita áudio ou vídeo.
-3. **Opções** — formato de saída (WAV ou MP3), motor e normalização de volume. Carrega em *Converter voz*.
+3. **Opções** — formato de saída (WAV ou MP3), motor, modelo e normalização de volume.
+   Carrega em *Converter voz*.
 
 O resultado aparece com dois leitores lado a lado (original e convertido) e um botão para descarregar.
 
@@ -70,11 +71,33 @@ O resultado aparece com dois leitores lado a lado (original e convertido) e um b
 | `elevenlabs` | API de *speech-to-speech* da ElevenLabs | Melhor qualidade. Envia o áudio para o serviço e exige `ELEVENLABS_API_KEY` e um plano com clonagem de voz. |
 | `passthrough` | Devolve o áudio original sem converter | Só para testar a aplicação sem carregar modelos. |
 
-O motor `coqui` suporta quatro modelos, escolhidos com `VC_COQUI_MODEL`:
+### Que modelo escolher
 
-- `freevc` (omissão) — FreeVC 24 kHz. Rápido e estável, é o mais equilibrado.
-- `openvoice_v2` / `openvoice_v1` — transferem o timbre da referência preservando melhor a prosódia.
-- `knnvc` — kNN-VC; costuma pedir amostras de referência mais longas para dar bons resultados.
+O motor `coqui` traz quatro modelos. Escolhe-os no seletor *Modelo* da interface (troca-se a meio da
+sessão, sem reiniciar) ou define o modelo por omissão com `VC_COQUI_MODEL`:
+
+- `freevc` (omissão) — FreeVC 24 kHz. Rápido, estável e o que melhor preserva a articulação.
+- `openvoice_v2` / `openvoice_v1` — transferem o timbre preservando melhor a prosódia, e são os
+  candidatos naturais para línguas que não o inglês.
+- `knnvc` — kNN-VC. Constrói a voz a partir de fragmentos da própria amostra, por isso precisa de
+  amostras longas; com 15 s de referência a articulação degrada-se de forma audível.
+
+Medição feita neste projeto, convertendo 7,9 s de fala **em português** (voz masculina, 92 Hz) para
+uma voz de referência feminina (171 Hz):
+
+| Modelo | F0 do resultado | Correlação do envelope com a origem | Saída |
+|---|---|---|---|
+| `freevc` | 186 Hz | **0,91** | 24 kHz |
+| `knnvc` | 166 Hz | 0,65 | 16 kHz |
+
+Ambos levam o tom para a gama da referência, mas a correlação do envelope — que mede quanto do
+ritmo e da articulação do original sobrevive — separa-os claramente: o `knnvc` esbate a fala.
+Daí o `freevc` ser o modelo por omissão.
+
+> O `openvoice_v2` **não pôde ser medido aqui**: os pesos vêm do `huggingface.co`, bloqueado no
+> ambiente onde este projeto foi desenvolvido. Numa máquina com acesso normal à internet descarrega
+> sem problema — vale a pena compará-lo com o `freevc` na tua própria voz, que é o único teste que
+> conta. O resultado indica sempre que modelo o produziu, para a comparação ser justa.
 
 ## Configuração
 
@@ -83,7 +106,7 @@ Tudo por variáveis de ambiente:
 | Variável | Omissão | Para que serve |
 |---|---|---|
 | `VC_ENGINE` | `coqui` | Motor usado por omissão |
-| `VC_COQUI_MODEL` | `freevc` | Modelo local |
+| `VC_COQUI_MODEL` | `freevc` | Modelo local pré-selecionado (`freevc`, `openvoice_v2`, `openvoice_v1`, `knnvc`) |
 | `VC_DEVICE` | `auto` | `auto`, `cpu`, `cuda` ou `mps` |
 | `VC_DATA_DIR` | `./data` | Onde ficam vozes, uploads e resultados |
 | `VC_CHUNK_SECONDS` | `20` | Tamanho máximo de cada bloco |
@@ -102,9 +125,10 @@ A interface web usa esta API; podes usá-la diretamente.
 # guardar uma voz
 curl -X POST localhost:8000/api/voices -F "name=Ana" -F "sample=@amostra.wav"
 
-# converter com uma voz guardada
+# converter com uma voz guardada (o campo model é opcional)
 curl -X POST localhost:8000/api/convert \
-     -F "source=@podcast.mp3" -F "voice_id=0de267467544" -F "output_format=mp3"
+     -F "source=@podcast.mp3" -F "voice_id=0de267467544" \
+     -F "output_format=mp3" -F "model=openvoice_v2"
 
 # acompanhar e descarregar
 curl localhost:8000/api/jobs/<job_id>
@@ -152,7 +176,7 @@ o carregamento acontece no arranque e a primeira conversão já não paga esse c
   degradam bastante o resultado — o ideal é uma voz só, gravada de forma limpa.
 - O sotaque e a entoação vêm do áudio de origem; só o timbre vem da amostra.
 - O FreeVC foi treinado sobretudo com inglês. Funciona com outras línguas, incluindo português,
-  mas a semelhança pode ser menor.
+  mas a semelhança pode ser menor — se for o teu caso, experimenta o `openvoice_v2` no seletor.
 - Os resultados ficam em disco durante `VC_JOB_RETENTION_HOURS` e depois são apagados.
 - Não há autenticação: pensada para correr localmente ou atrás de um proxy que trate disso.
 

@@ -96,13 +96,16 @@ def convert_file(
         audio.concat_wavs(converted, joined)
 
         report(96, "A exportar…")
-        audio.encode_output(joined, output_path, options.output_format, options.normalize)
+        out_rate = audio.wav_sample_rate(joined)
+        # mp3 cannot carry every rate the models produce; 48 kHz is its practical ceiling.
+        encode_rate = out_rate if options.output_format == "wav" else min(out_rate, 48000)
+        audio.encode_output(joined, output_path, options.output_format, options.normalize, encode_rate)
 
         result = ConversionResult(
             output_path=output_path,
             duration=audio.probe_duration(output_path),
             chunks=total,
-            sample_rate=audio.wav_sample_rate(joined),
+            sample_rate=out_rate,
         )
         report(100, "Concluído")
         return result
