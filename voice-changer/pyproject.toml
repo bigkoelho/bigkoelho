@@ -1,0 +1,14 @@
+[project]
+name = "voice-changer"
+version = "1.0.0"
+description = "Converte a voz de um ficheiro de áudio para a voz de uma amostra."
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 118
+target-version = "py310"

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voice Changer — converter áudio para outra voz</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>" />
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand">
+      <span class="brand-mark">🎙️</span>
+      <div>
+        <h1>Voice Changer</h1>
+        <p>Dá uma amostra de voz e converte qualquer áudio para essa voz.</p>
+      </div>
+    </div>
+    <div id="health" class="health" aria-live="polite"></div>
+  </header>
+
+  <main>
+    <!-- Step 1 --------------------------------------------------------- -->
+    <section class="card">
+      <h2><span class="step">1</span> Voz de referência</h2>
+      <p class="hint">10 a 30 segundos de fala limpa, sem música nem ruído de fundo, chegam para bons resultados.</p>
+
+      <div class="tabs" role="tablist">
+        <button class="tab is-active" role="tab" data-tab="upload">Carregar ficheiro</button>
+        <button class="tab" role="tab" data-tab="record">Gravar agora</button>
+        <button class="tab" role="tab" data-tab="library">Vozes guardadas</button>
+      </div>
+
+      <div class="panel is-active" data-panel="upload">
+        <label class="dropzone" id="sample-drop">
+          <input type="file" id="sample-input" accept="audio/*,video/*" hidden />
+          <strong>Arrasta a amostra para aqui</strong>
+          <span>ou clica para escolher (wav, mp3, m4a, ogg, flac…)</span>
+        </label>
+        <div id="sample-preview" class="preview hidden">
+          <audio controls></audio>
+          <div class="preview-meta"><span class="file-name"></span><button class="link danger" id="sample-clear">remover</button></div>
+        </div>
+      </div>
+
+      <div class="panel" data-panel="record">
+        <div class="recorder">
+          <button id="record-toggle" class="btn record">Gravar</button>
+          <span id="record-time" class="record-time">00:00</span>
+          <span class="hint inline">Lê um texto qualquer em voz natural durante ~20 s.</span>
+        </div>
+        <div id="record-preview" class="preview hidden">
+          <audio controls></audio>
+          <div class="preview-meta"><span class="file-name">Gravação</span><button class="link danger" id="record-clear">remover</button></div>
+        </div>
+      </div>
+
+      <div class="panel" data-panel="library">
+        <ul id="voice-list" class="voice-list"></ul>
+        <p id="voice-empty" class="hint">Ainda não há vozes guardadas. Guarda uma ao converter.</p>
+      </div>
+
+      <label class="checkbox" id="save-voice-row">
+        <input type="checkbox" id="save-voice" />
+        <span>Guardar esta voz na biblioteca como</span>
+        <input type="text" id="voice-name" placeholder="nome da voz" maxlength="80" />
+      </label>
+    </section>
+
+    <!-- Step 2 --------------------------------------------------------- -->
+    <section class="card">
+      <h2><span class="step">2</span> Áudio a converter</h2>
+      <p class="hint">O ficheiro cuja voz vai ser substituída. Aceita áudio ou vídeo; extraímos a faixa de som.</p>
+      <label class="dropzone" id="source-drop">
+        <input type="file" id="source-input" accept="audio/*,video/*" hidden />
+        <strong>Arrasta o áudio para aqui</strong>
+        <span>ou clica para escolher</span>
+      </label>
+      <div id="source-preview" class="preview hidden">
+        <audio controls></audio>
+        <div class="preview-meta"><span class="file-name"></span><button class="link danger" id="source-clear">remover</button></div>
+      </div>
+    </section>
+
+    <!-- Step 3 --------------------------------------------------------- -->
+    <section class="card">
+      <h2><span class="step">3</span> Opções</h2>
+      <div class="options">
+        <label>
+          <span>Formato de saída</span>
+          <select id="output-format">
+            <option value="wav">WAV (sem perdas)</option>
+            <option value="mp3">MP3 (192 kbps)</option>
+          </select>
+        </label>
+        <label>
+          <span>Motor</span>
+          <select id="engine"></select>
+        </label>
+        <label class="checkbox standalone">
+          <input type="checkbox" id="normalize" checked />
+          <span>Normalizar volume do resultado</span>
+        </label>
+      </div>
+
+      <button id="convert" class="btn primary" disabled>Converter voz</button>
+      <p id="form-error" class="error hidden"></p>
+    </section>
+
+    <!-- Progress / result ---------------------------------------------- -->
+    <section class="card hidden" id="progress-card">
+      <h2>A processar</h2>
+      <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
+      <p id="progress-message" class="hint">Na fila…</p>
+    </section>
+
+    <section class="card hidden" id="result-card">
+      <h2>Resultado</h2>
+      <div class="result-grid">
+        <div>
+          <h3>Original</h3>
+          <audio id="result-original" controls></audio>
+        </div>
+        <div>
+          <h3>Com a nova voz</h3>
+          <audio id="result-converted" controls></audio>
+        </div>
+      </div>
+      <div class="result-actions">
+        <a id="download" class="btn primary" download>Descarregar</a>
+        <button id="again" class="btn ghost">Converter outro ficheiro</button>
+      </div>
+      <p id="result-meta" class="hint"></p>
+    </section>
+
+    <p class="footnote">
+      Usa apenas vozes que sejam tuas ou para as quais tenhas autorização de quem fala.
+      O processamento local não envia ficheiros para lado nenhum; o motor ElevenLabs envia-os para a API desse serviço.
+    </p>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
