@@ -1,0 +1,4 @@
+# Dependências para correr os testes. Instala também as de produção.
+-r requirements.txt
+
+pytest>=8

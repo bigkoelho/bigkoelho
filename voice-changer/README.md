@@ -28,9 +28,19 @@ amostra de voz ──► limpeza (corte de silêncio, normalização, máx. 30 s
 
 - Python 3.10 ou superior
 - **ffmpeg** e **ffprobe** no PATH (`sudo apt install ffmpeg` / `brew install ffmpeg`)
-- ~2 GB de disco para as dependências e ~1 GB para os pesos do modelo (descarregados na primeira conversão)
+- ~1 GB de disco para os pesos do modelo, descarregados na primeira conversão
 
 Corre em CPU. Se houver GPU NVIDIA disponível, é usada automaticamente.
+
+> **Em Linux sem GPU:** o `pip install torch` traz por omissão os pacotes CUDA da NVIDIA, cerca de
+> 3 GB que nunca vais usar. Para os evitar, instala primeiro a versão só-CPU e depois o resto:
+>
+> ```bash
+> pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+> pip install -r requirements.txt
+> ```
+>
+> Em macOS não se põe a questão: não existem *wheels* CUDA, a instalação normal já é leve.
 
 ## Arranque
 
@@ -151,6 +161,7 @@ A conversão é assíncrona: `/api/convert` devolve imediatamente um `id` e o pr
 ## Testes
 
 ```bash
+.venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest
 ```
 
